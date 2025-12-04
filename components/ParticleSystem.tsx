@@ -1,6 +1,6 @@
 import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { InstancedMesh, Object3D, Vector3, MathUtils, Color } from 'three';
+import { InstancedMesh, Object3D, Vector3, MathUtils, Color, InstancedBufferAttribute } from 'three';
 import { AppState, ParticleData } from '../types';
 import { CONFIG } from '../constants';
 
@@ -105,6 +105,11 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
   useEffect(() => {
     if (!particleRef.current) return;
     
+    // Safety check: ensure instanceColor attribute exists
+    if (!particleRef.current.instanceColor) {
+        particleRef.current.instanceColor = new InstancedBufferAttribute(new Float32Array(CONFIG.PARTICLE_COUNT * 3), 3);
+    }
+
     // Parse the base color
     const baseColor = new Color(treeColor);
     const lighterColor = baseColor.clone().offsetHSL(0, 0, 0.1); // Slightly lighter variant
@@ -115,7 +120,6 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
         tempColor.copy(isDark ? baseColor : lighterColor);
         
         // Boost brightness for Bloom
-        // Increased multiplier from 0.7-1.0 to 1.5-2.5 to make them really glow
         const brightness = Math.sin(i * 0.1) * 0.5 + 2.0; 
         tempColor.multiplyScalar(brightness);
 
@@ -126,6 +130,11 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
 
   useEffect(() => {
     if (!goldRef.current) return;
+
+    if (!goldRef.current.instanceColor) {
+        goldRef.current.instanceColor = new InstancedBufferAttribute(new Float32Array(CONFIG.ORNAMENT_COUNT * 3), 3);
+    }
+
     const baseColor = new Color(ornamentColorA);
     
     for (let i = 0; i < CONFIG.ORNAMENT_COUNT; i++) {
@@ -139,6 +148,11 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
 
   useEffect(() => {
     if (!redRef.current) return;
+
+    if (!redRef.current.instanceColor) {
+        redRef.current.instanceColor = new InstancedBufferAttribute(new Float32Array(CONFIG.ORNAMENT_RED_COUNT * 3), 3);
+    }
+
     const baseColor = new Color(ornamentColorB);
     
     for (let i = 0; i < CONFIG.ORNAMENT_RED_COUNT; i++) {
