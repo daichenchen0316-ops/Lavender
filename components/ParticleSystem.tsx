@@ -31,10 +31,9 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
   const goldRef = useRef<InstancedMesh>(null);
   const redRef = useRef<InstancedMesh>(null);
   
-  // Ref to store the shader to update uniform uTime
   const shaderRef = useRef<Shader | null>(null);
 
-  // Generate position data (independent of color)
+  // --- Data Generation ---
   const particlesData = useMemo(() => {
     const data: ParticleData[] = [];
     for (let i = 0; i < CONFIG.PARTICLE_COUNT; i++) {
@@ -61,7 +60,7 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
         id: i,
         treePos: new Vector3(treeX, y, treeZ),
         scatterPos: new Vector3(scatterX, scatterY, scatterZ),
-        color: new Color(), // Placeholder, updated in Effect
+        color: new Color(),
         scale: Math.random() * 0.5 + 0.5,
         rotationSpeed: Math.random() * 0.02 + 0.01,
         phaseOffset: Math.random() * Math.PI * 2
@@ -101,71 +100,65 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
   const goldData = useMemo(() => generateOrnamentData(CONFIG.ORNAMENT_COUNT, 1.0), []);
   const redData = useMemo(() => generateOrnamentData(CONFIG.ORNAMENT_RED_COUNT, 0.8), []);
 
-  // Update Colors Dynamically
+  // --- Buffer Initialization ---
+  // We initialize these once to ensure memory is allocated immediately on mount
+  const particleColors = useMemo(() => new Float32Array(CONFIG.PARTICLE_COUNT * 3), []);
+  const goldColors = useMemo(() => new Float32Array(CONFIG.ORNAMENT_COUNT * 3), []);
+  const redColors = useMemo(() => new Float32Array(CONFIG.ORNAMENT_RED_COUNT * 3), []);
+
+  // --- Color Updates ---
   useEffect(() => {
     if (!particleRef.current) return;
     
-    // Safety check: ensure instanceColor attribute exists
-    if (!particleRef.current.instanceColor) {
-        particleRef.current.instanceColor = new InstancedBufferAttribute(new Float32Array(CONFIG.PARTICLE_COUNT * 3), 3);
-    }
+    // Safety: The InstancedBufferAttribute is attached via JSX, so we access it via instanceColor
+    const attr = particleRef.current.instanceColor;
+    if (!attr) return;
 
-    // Parse the base color
     const baseColor = new Color(treeColor);
-    const lighterColor = baseColor.clone().offsetHSL(0, 0, 0.1); // Slightly lighter variant
+    const lighterColor = baseColor.clone().offsetHSL(0, 0, 0.1);
 
     for (let i = 0; i < CONFIG.PARTICLE_COUNT; i++) {
         const isDark = (i % 3 === 0) || (i % 7 === 0);
-        
         tempColor.copy(isDark ? baseColor : lighterColor);
+        // Slight randomization for natural look
+        tempColor.offsetHSL(0, 0, (Math.random() - 0.5) * 0.05); 
         
-        // Boost brightness for Bloom
-        const brightness = Math.sin(i * 0.1) * 0.5 + 2.0; 
-        tempColor.multiplyScalar(brightness);
-
-        particleRef.current.setColorAt(i, tempColor);
+        // Write directly to buffer array
+        tempColor.toArray(attr.array, i * 3);
     }
-    particleRef.current.instanceColor!.needsUpdate = true;
+    attr.needsUpdate = true;
   }, [treeColor]);
 
   useEffect(() => {
     if (!goldRef.current) return;
-
-    if (!goldRef.current.instanceColor) {
-        goldRef.current.instanceColor = new InstancedBufferAttribute(new Float32Array(CONFIG.ORNAMENT_COUNT * 3), 3);
-    }
+    const attr = goldRef.current.instanceColor;
+    if (!attr) return;
 
     const baseColor = new Color(ornamentColorA);
-    
     for (let i = 0; i < CONFIG.ORNAMENT_COUNT; i++) {
         tempColor.copy(baseColor);
         tempColor.offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
-        tempColor.multiplyScalar(1.5); // Slight boost
-        goldRef.current.setColorAt(i, tempColor);
+        tempColor.toArray(attr.array, i * 3);
     }
-    goldRef.current.instanceColor!.needsUpdate = true;
+    attr.needsUpdate = true;
   }, [ornamentColorA]);
 
   useEffect(() => {
     if (!redRef.current) return;
-
-    if (!redRef.current.instanceColor) {
-        redRef.current.instanceColor = new InstancedBufferAttribute(new Float32Array(CONFIG.ORNAMENT_RED_COUNT * 3), 3);
-    }
+    const attr = redRef.current.instanceColor;
+    if (!attr) return;
 
     const baseColor = new Color(ornamentColorB);
-    
     for (let i = 0; i < CONFIG.ORNAMENT_RED_COUNT; i++) {
         tempColor.copy(baseColor);
         tempColor.offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
-        tempColor.multiplyScalar(1.2); // Slight boost
-        redRef.current.setColorAt(i, tempColor);
+        tempColor.toArray(attr.array, i * 3);
     }
-    redRef.current.instanceColor!.needsUpdate = true;
+    attr.needsUpdate = true;
   }, [ornamentColorB]);
 
 
-  // Animation Loop
+  // --- Animation Loop ---
   const mixFactor = useRef(0);
 
   useFrame((state, delta) => {
@@ -173,12 +166,11 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
     mixFactor.current = MathUtils.damp(mixFactor.current, target, CONFIG.TRANSITION_SPEED, delta);
     const t = mixFactor.current;
     
-    // Update Shader Uniform
     if (shaderRef.current) {
         shaderRef.current.uniforms.uTime.value = state.clock.elapsedTime;
     }
 
-    // Animate Tree Particles
+    // 1. Tree Particles
     if (particleRef.current) {
       particlesData.forEach((particle, i) => {
         tempPos.lerpVectors(particle.scatterPos, particle.treePos, t);
@@ -198,6 +190,7 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
       particleRef.current.instanceMatrix.needsUpdate = true;
     }
 
+    // 2. Ornaments
     const animateOrnaments = (ref: React.RefObject<InstancedMesh>, data: ParticleData[]) => {
         if (!ref.current) return;
         data.forEach((particle, i) => {
@@ -222,6 +215,8 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
     <>
       <instancedMesh ref={particleRef} args={[undefined, undefined, CONFIG.PARTICLE_COUNT]}>
         <dodecahedronGeometry args={[0.06, 0]} />
+        {/* Declaratively attach color buffer to avoid uninitialized memory crashes */}
+        <instancedBufferAttribute attach="instanceColor" args={[particleColors, 3]} />
         <meshStandardMaterial 
             roughness={0.2} 
             metalness={0.8}
@@ -229,10 +224,12 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
             onBeforeCompile={(shader) => {
                 shaderRef.current = shader;
                 shader.uniforms.uTime = { value: 0 };
-                // Inject varying for world position
+                
+                // 1. Inject varying for position
                 shader.vertexShader = `
                     varying vec3 vWorldPos;
                 ` + shader.vertexShader;
+                
                 shader.vertexShader = shader.vertexShader.replace(
                     '#include <worldpos_vertex>',
                     `
@@ -241,20 +238,24 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
                     `
                 );
 
-                // Inject flicker logic
+                // 2. Inject flicker logic
+                // Using totalEmissiveRadiance is safer for WebGL2 than gl_FragColor
                 shader.fragmentShader = `
                     uniform float uTime;
                     varying vec3 vWorldPos;
                 ` + shader.fragmentShader;
 
                 shader.fragmentShader = shader.fragmentShader.replace(
-                    '#include <tonemapping_fragment>',
+                    '#include <emissivemap_fragment>',
                     `
-                    #include <tonemapping_fragment>
-                    // Sparkle math: combine time and position for random blinking
+                    #include <emissivemap_fragment>
+                    
+                    // Sparkle math
                     float sparkle = sin(uTime * 4.0 + vWorldPos.x * 10.0) * sin(uTime * 2.0 + vWorldPos.y * 10.0) * 0.5 + 0.5;
-                    // Boost the brightness when sparkling
-                    gl_FragColor.rgb += gl_FragColor.rgb * sparkle * 1.5;
+                    
+                    // Add light to the emissive channel (makes it bloom)
+                    // We multiply by diffuseColor to keep the tint
+                    totalEmissiveRadiance += diffuseColor.rgb * sparkle * 2.0; 
                     `
                 );
             }}
@@ -263,22 +264,20 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
 
       <instancedMesh ref={goldRef} args={[undefined, undefined, CONFIG.ORNAMENT_COUNT]}>
         <sphereGeometry args={[0.15, 16, 16]} />
+        <instancedBufferAttribute attach="instanceColor" args={[goldColors, 3]} />
         <meshStandardMaterial 
-            color={ornamentColorA}
             roughness={0.1}
             metalness={1}
-            emissive={ornamentColorA}
             emissiveIntensity={0.5}
         />
       </instancedMesh>
 
       <instancedMesh ref={redRef} args={[undefined, undefined, CONFIG.ORNAMENT_RED_COUNT]}>
         <sphereGeometry args={[0.12, 16, 16]} />
+        <instancedBufferAttribute attach="instanceColor" args={[redColors, 3]} />
         <meshStandardMaterial 
-            color={ornamentColorB}
             roughness={0.1}
             metalness={0.8}
-            emissive={ornamentColorB}
             emissiveIntensity={0.6}
         />
       </instancedMesh>
