@@ -19,7 +19,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="w-full h-screen bg-black relative">
+    <div className="w-full h-[100dvh] bg-black relative overflow-hidden">
       
       {/* 3D Scene */}
       <div className="absolute inset-0 z-0">

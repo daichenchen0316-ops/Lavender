@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AppState } from '../types';
 
 interface UIOverlayProps {
@@ -36,6 +36,16 @@ const ColorPicker: React.FC<{
   </div>
 );
 
+const ShareIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="18" cy="5" r="3"></circle>
+    <circle cx="6" cy="12" r="3"></circle>
+    <circle cx="18" cy="19" r="3"></circle>
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+  </svg>
+);
+
 export const UIOverlay: React.FC<UIOverlayProps> = ({ 
   mode, 
   onToggle,
@@ -47,12 +57,22 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
   setOrnamentColorB
 }) => {
   const isTree = mode === AppState.TREE_SHAPE;
+  const [showToast, setShowToast] = useState(false);
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 2000);
+    });
+  };
 
   return (
     <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-8 z-10">
       
-      {/* Top Bar */}
-      <div className="flex justify-center items-start pointer-events-auto w-full">
+      {/* Top Bar with Share Button */}
+      <div className="flex justify-between items-start pointer-events-auto w-full relative">
+        <div className="w-10"></div> {/* Spacer for balance */}
+        
         {/* Header */}
         <header className="flex flex-col items-center pt-8 opacity-90 transition-opacity duration-1000">
             <h1 className="text-gold-400 font-serif text-5xl md:text-7xl tracking-widest uppercase drop-shadow-[0_0_10px_rgba(255,215,0,0.5)] text-center">
@@ -60,6 +80,27 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
             </h1>
             <div className="h-px w-24 bg-gradient-to-r from-transparent via-gold-500 to-transparent mt-6 mb-2"></div>
         </header>
+
+        {/* Share Button */}
+        <div className="flex flex-col items-end relative">
+            <button 
+                onClick={handleShare}
+                className="text-gold-500/60 hover:text-gold-400 hover:scale-110 transition-all duration-300 p-2"
+                title="Copy Link"
+            >
+                <ShareIcon />
+            </button>
+            
+            {/* Toast Notification */}
+            <div className={`
+                absolute top-full right-0 mt-2 px-3 py-1 bg-gold-900/90 text-gold-100 text-xs 
+                rounded border border-gold-500/30 whitespace-nowrap backdrop-blur-md
+                transition-all duration-300 transform
+                ${showToast ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}
+            `}>
+                Link Copied!
+            </div>
+        </div>
       </div>
 
       {/* Footer Controls Container */}
